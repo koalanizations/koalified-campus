@@ -550,6 +550,44 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0a0800;font-family:
   }
 }
 
+
+/* KOALIFIED V7 DAILY RESET UI */
+#daily-reset-panel{
+  position:fixed;
+  left:10px;
+  bottom:10px;
+  z-index:9998;
+  background:rgba(0,0,0,.82);
+  border:2px solid #e8c96a;
+  color:#e8c96a;
+  font-family:"Press Start 2P",monospace;
+  font-size:6px;
+  line-height:1.8;
+  padding:8px 10px;
+  pointer-events:none;
+  box-shadow:0 0 18px rgba(232,201,106,.12);
+}
+#daily-reset-timer{
+  color:#44ff44;
+}
+@media(max-width:700px){
+  #daily-reset-panel{
+    font-size:5px;
+    left:8px;
+    bottom:8px;
+    padding:6px 7px;
+    max-width:170px;
+  }
+}
+
+
+/* KOALIFIED V10 NO DUPLICATE HOLDER BADGE */
+#holder-status,
+.holder-status,
+#react-holder-status{
+  display:none!important;
+}
+
 </style>
 <script>
 // Save native fetch before MetaMask SES lockdown
@@ -1547,26 +1585,19 @@ function startGameLogin() {
           bamboo = stats ? (stats.total_koins || 0) : 0;
           return Promise.all([
             sbLoadSeenQuestions(player.id),
-            sbLoadDojoProgress(player.id)
+            sbLoadDailyDojoCompletions(player.id)
           ]);
         }).then(function(results) {
           seenQuestions = results[0] || {};
-          var completedRows = results[1] || [];
-
-          completedRows.forEach(function(row) {
-            if (row.completed && typeof row.dojo_id === 'number' && zoneDone[row.dojo_id] !== undefined) {
-              zoneDone[row.dojo_id] = true;
-              if (ZONES[row.dojo_id]) ZONES[row.dojo_id].done = true;
-            }
-          });
+          applyDailyLocks(results[1] || []);
 
           loadLeaderboard();
 
           var doneNow = zoneDone.filter(Boolean).length;
-          console.log('On load: zoneDone=' + doneNow + '/' + ZONES.length);
+          console.log('Daily on load: zoneDone=' + doneNow + '/' + ZONES.length);
 
           if (doneNow >= ZONES.length) {
-            setTimeout(showDailyComplete, 2000);
+            setTimeout(showDailyComplete, 1200);
           }
 
           var xtxt = document.getElementById('xp-txt');
@@ -1628,24 +1659,189 @@ function seededShuffle(arr, seed) {
 
 var QUESTIONS_PER_DOJO = 3;
 
-function getDailyQuestions(zi) {
-  var pool = ZONE_QUESTIONS[zi] || [];
-  var day = getWarmupDay();
-  var seen = getSeenQuestions(zi);
 
-  // Filter out already-seen questions
-  var available = pool.map(function(_,i){return i;}).filter(function(i){
-    return seen.indexOf(i) < 0;
+/* KOALIFIED V7 REAL DAILY RESET SYSTEM */
+var dailyCompletedDojos = window.dailyCompletedDojos || [];
+window.dailyCompletedDojos = dailyCompletedDojos;
+
+function getUtcDateKey(offsetDays) {
+  offsetDays = offsetDays || 0;
+  var d = new Date();
+  d.setUTCDate(d.getUTCDate() + offsetDays);
+  return d.toISOString().slice(0, 10);
+}
+
+function secondsToUtcReset() {
+  var now = new Date();
+  var next = new Date(Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate() + 1,
+    0, 0, 0
+  ));
+  return Math.max(0, Math.floor((next.getTime() - now.getTime()) / 1000));
+}
+
+function formatCountdown(totalSeconds) {
+  var h = Math.floor(totalSeconds / 3600);
+  var m = Math.floor((totalSeconds % 3600) / 60);
+  var s = totalSeconds % 60;
+  return String(h).padStart(2, '0') + ':' +
+         String(m).padStart(2, '0') + ':' +
+         String(s).padStart(2, '0');
+}
+
+function updateDailyResetTimer() {
+  var el = document.getElementById('daily-reset-timer');
+  if (el) el.textContent = formatCountdown(secondsToUtcReset());
+}
+
+setInterval(updateDailyResetTimer, 1000);
+setTimeout(updateDailyResetTimer, 100);
+
+async function sbLoadDailyDojoCompletions(playerId) {
+  if (!playerId) return [];
+
+  var today = getUtcDateKey();
+
+  var rows = await sbFetch(
+    'daily_dojo_completions?player_id=eq.' + playerId +
+    '&completed_date=eq.' + today +
+    '&select=dojo_id,completed_date,questions_answered',
+    'GET'
+  );
+
+  return rows || [];
+}
+
+async function sbSaveDailyDojoCompletion(playerId, dojoId) {
+  if (!playerId && !playerDbId) return null;
+  playerId = playerId || playerDbId;
+
+  var today = getUtcDateKey();
+
+  console.log('SUPABASE save daily dojo completion:', {
+    playerId: playerId,
+    dojoId: dojoId,
+    completed_date: today
   });
 
+  return await sbFetch(
+    'daily_dojo_completions?on_conflict=player_id,dojo_id,completed_date',
+    'POST',
+    {
+      player_id: playerId,
+      dojo_id: dojoId,
+      completed_date: today,
+      questions_answered: QUESTIONS_PER_DOJO || 3,
+      created_at: new Date().toISOString()
+    }
+  );
+}
+
+function applyDailyLocks(rows) {
+  dailyCompletedDojos = [];
+  window.dailyCompletedDojos = dailyCompletedDojos;
+
+  zoneDone = ZONES.map(function(){ return false; });
+
+  (rows || []).forEach(function(row){
+    if (typeof row.dojo_id === 'number' && zoneDone[row.dojo_id] !== undefined) {
+      dailyCompletedDojos[row.dojo_id] = true;
+      zoneDone[row.dojo_id] = true;
+      if (ZONES[row.dojo_id]) ZONES[row.dojo_id].done = true;
+    }
+  });
+
+  console.log('Daily locks loaded:', zoneDone.filter(Boolean).length + '/' + ZONES.length);
+}
+
+function isDojoCompletedToday(zi) {
+  return !!dailyCompletedDojos[zi];
+}
+
+function showDailyLockedPrompt(zi) {
+  var p = document.getElementById('zone-prompt');
+  if (!p) return;
+
+  p.style.display = 'block';
+  p.innerHTML =
+    'COMPLETED TODAY ✓<br>' +
+    '<span style="color:#44ff44">Resets in ' + formatCountdown(secondsToUtcReset()) + '</span>';
+
+  setTimeout(function(){
+    if (p && !quizOpen) p.style.display = 'none';
+  }, 2400);
+}
+
+function chooseDailyQuestionsNoRepeat(zi) {
+  var pool = ZONE_QUESTIONS[zi] || [];
+  var seen = seenQuestions[zi] || [];
+
+  var available = pool
+    .map(function(q, idx){
+      return {
+        q:q,
+        idx:idx
+      };
+    })
+    .filter(function(item){
+      return seen.indexOf(item.idx) < 0;
+    });
+
   if (available.length === 0) {
-    // All seen — reset for this dojo
-    available = pool.map(function(_,i){return i;});
+    return [];
   }
 
-  // Shuffle available indices with player+day seed
-  var shuffled = seededShuffle(available, getPlayerQuestionSeed() + '|dojo:' + zi + '|day:' + day);
-  return shuffled.slice(0, QUESTIONS_PER_DOJO).map(function(i){return pool[i];});
+  // TRUE PLAYER-SPECIFIC RANDOMIZATION
+  // Every player gets a different question order
+  // but questions never repeat for that player.
+
+  var seedBase =
+    (playerDbId || playerName || 'guest') +
+    '-' +
+    getUtcDateKey() +
+    '-' +
+    zi +
+    '-' +
+    available.length;
+
+  var seed = 0;
+
+  for (var i = 0; i < seedBase.length; i++) {
+    seed = ((seed << 5) - seed + seedBase.charCodeAt(i)) >>> 0;
+  }
+
+  function seededRandom() {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 4294967296;
+  }
+
+  // Fisher-Yates Shuffle
+  for (var j = available.length - 1; j > 0; j--) {
+    var randIndex = Math.floor(seededRandom() * (j + 1));
+
+    var temp = available[j];
+    available[j] = available[randIndex];
+    available[randIndex] = temp;
+  }
+
+  return available
+    .slice(0, QUESTIONS_PER_DOJO)
+    .map(function(item){
+      return item.q;
+    });
+}
+
+function getDailyQuestions(zi) {
+  if (!window.dailyQuestions) window.dailyQuestions = {};
+  var key = getUtcDateKey() + '-' + zi;
+
+  if (!window.dailyQuestions[key]) {
+    window.dailyQuestions[key] = chooseDailyQuestionsNoRepeat(zi);
+  }
+
+  return window.dailyQuestions[key] || [];
 }
 
 // ── Leaderboard Toggle ────────────────────────────────────────
@@ -2167,35 +2363,41 @@ function answer(btn,correct,xpAmt,explanation){
   }
 }
 function nextQ(){
-  var isLast = currentQ >= Math.min(QUESTIONS_PER_DOJO, getDailyQuestions(activeZ).length) - 1;
+  var dailyQs = getDailyQuestions(activeZ);
+  var isLast = currentQ >= Math.min(QUESTIONS_PER_DOJO, dailyQs.length) - 1;
 
   if(isLast){
     zoneDone[activeZ] = true;
-    ZONES[activeZ].done = true;
+    dailyCompletedDojos[activeZ] = true;
+    window.dailyCompletedDojos = dailyCompletedDojos;
+
+    if (ZONES[activeZ]) ZONES[activeZ].done = true;
 
     if(playerDbId){
       sbSaveDojoProgress(playerDbId, activeZ)
-        .then(function(){ console.log("Dojo progress saved:", activeZ); })
+        .then(function(){ console.log("All-time dojo progress saved:", activeZ); })
         .catch(function(e){ console.warn("Save dojo failed:", e); });
+
+      sbSaveDailyDojoCompletion(playerDbId, activeZ)
+        .then(function(){ console.log("Daily dojo completion saved:", activeZ); })
+        .catch(function(e){ console.warn("Save daily dojo failed:", e); });
     }
 
     document.getElementById("quiz").style.display = "none";
     quizOpen = false;
     zoneCooldown = 1.5;
 
-    if (typeof updateDojoDebug === "function") updateDojoDebug();
-
     var completed = zoneDone.filter(Boolean).length;
     var total = ZONES.length;
 
-    console.log("DOJO COMPLETED:", completed + " / " + total);
+    console.log("DAILY DOJO COMPLETED:", completed + " / " + total);
 
     if (completed >= total) {
-      console.log("ALL DOJOS COMPLETE -> OPEN COMPLETE SCREEN");
+      console.log("ALL DAILY DOJOS COMPLETE -> OPEN COMPLETE SCREEN");
 
       if(playerDbId){
         sbSaveDailyCompletion(playerDbId)
-          .then(function(){ console.log("Daily completion saved"); })
+          .then(function(){ console.log("Daily all-dojo completion saved"); })
           .catch(function(e){ console.warn("Save daily completion failed:", e); });
       }
 
@@ -2558,6 +2760,54 @@ document.addEventListener("DOMContentLoaded", function(){
   setTimeout(finalSafetyFix, 500);
   setTimeout(finalSafetyFix, 1500);
   setInterval(finalSafetyFix, 3000);
+})();
+</script>
+
+
+<div id="daily-reset-panel">
+  UTC RESET IN<br>
+  <span id="daily-reset-timer">--:--:--</span>
+</div>
+
+
+<script>
+/* KOALIFIED V8 GAME STATE BRIDGE */
+(function(){
+  function notifyParent(type){
+    try{
+      if(window.parent && window.parent !== window){
+        window.parent.postMessage({ type:type }, window.location.origin);
+      }
+    }catch(e){}
+  }
+
+  function checkStartState(){
+    var start = document.getElementById("start-screen");
+    if(!start) return;
+
+    var style = getComputedStyle(start);
+    var visible = style.display !== "none" &&
+                  style.visibility !== "hidden" &&
+                  style.opacity !== "0";
+
+    notifyParent(visible ? "KOALIFIED_LOGIN_SCREEN" : "KOALIFIED_GAME_STARTED");
+  }
+
+  document.addEventListener("DOMContentLoaded", function(){
+    var startBtn = document.getElementById("start-btn");
+    if(startBtn){
+      startBtn.addEventListener("click", function(){
+        setTimeout(function(){
+          notifyParent("KOALIFIED_GAME_STARTED");
+        }, 350);
+      });
+    }
+
+    setTimeout(checkStartState, 500);
+    setTimeout(checkStartState, 1500);
+  });
+
+  setInterval(checkStartState, 3000);
 })();
 </script>
 

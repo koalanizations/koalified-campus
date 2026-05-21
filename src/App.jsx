@@ -79,6 +79,7 @@ export default function App() {
   const { disconnect } = useDisconnect();
 
   const [frameReady, setFrameReady] = useState(false);
+  const [gameStarted, setGameStarted] = useState(false);
   const [nftCount, setNftCount] = useState(0);
   const [checkingNfts, setCheckingNfts] = useState(false);
 
@@ -136,15 +137,60 @@ export default function App() {
     return () => clearInterval(timer);
   }, [address, nftCount, multiplier, holderLabel]);
 
+
+  useEffect(() => {
+    function handleCampusMessage(event) {
+      const data = event.data || {};
+      if (data.type === 'KOALIFIED_GAME_STARTED') {
+        setGameStarted(true);
+      }
+      if (data.type === 'KOALIFIED_LOGIN_SCREEN') {
+        setGameStarted(false);
+      }
+    }
+
+    window.addEventListener('message', handleCampusMessage);
+    return () => window.removeEventListener('message', handleCampusMessage);
+  }, []);
+
+
+  useEffect(() => {
+    function checkIframeLoginState() {
+      try {
+        const doc = iframeRef.current?.contentWindow?.document;
+        if (!doc) return;
+
+        const startScreen = doc.getElementById('start-screen');
+        if (!startScreen) return;
+
+        const style = iframeRef.current.contentWindow.getComputedStyle(startScreen);
+        const visible =
+          style.display !== 'none' &&
+          style.visibility !== 'hidden' &&
+          style.opacity !== '0';
+
+        setGameStarted(!visible);
+      } catch (e) {
+        // iframe is same-origin in Vercel/Vite, but ignore if browser blocks temporarily
+      }
+    }
+
+    const timer = setInterval(checkIframeLoginState, 700);
+    setTimeout(checkIframeLoginState, 300);
+    setTimeout(checkIframeLoginState, 1200);
+
+    return () => clearInterval(timer);
+  }, [frameReady]);
+
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${gameStarted ? "game-started" : "login-active"}`}>
       <div className="wallet-bar">
         <div className="brand">
           <div>
             <div className="brand-title">KOALIFIED CAMPUS</div>
             <div className="brand-sub">
               {isConnected
-                ? `Wallet connected! ${shortAddress(address)}`
+                ? `Wallet connected! ${shortAddress(address)} · x${multiplier} · ${holderLabel}`
                 : 'Warm-Up Season'}
             </div>
           </div>
@@ -171,20 +217,12 @@ export default function App() {
         </div>
       </div>
 
-      {isConnected && (
-        <div className="holder-status">
-          <span>{shortAddress(address)}</span>
-          <strong>x{multiplier}</strong>
-          <span>{holderLabel}</span>
-        </div>
-      )}
-
       <iframe
         ref={iframeRef}
         src="/campus.html"
         title="Koalified Campus Game"
         className="campus-frame"
-        onLoad={() => setFrameReady(true)}
+        onLoad={() => { setFrameReady(true); setGameStarted(false); }}
         allow="clipboard-read; clipboard-write; fullscreen"
       />
     </div>
