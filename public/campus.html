@@ -199,9 +199,28 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0a0800;font-family:
 #leaderboard.show{display:block}
 #leaderboard-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
 #leaderboard-title{font-size:6px}
-#leaderboard-close{background:#120000;color:#e8c96a;border:1px solid #4a3200;font-family:"Press Start 2P",monospace;font-size:7px;width:22px;height:20px;cursor:pointer}
-#leaderboard-list{font-size:5px;color:#bbb;line-height:1.9;max-height:120px;overflow:hidden}
-#leaderboard-list .me{color:#44cc22}
+#leaderboard-close{
+  background:#120000;
+  color:#e8c96a;
+  border:1px solid #4a3200;
+  font-family:"Press Start 2P",monospace;
+  font-size:7px;
+  width:22px;
+  height:20px;
+  cursor:pointer
+}
+
+#leaderboard-list{
+  font-size:5px;
+  color:#bbb;
+  line-height:1.9;
+  max-height:220px;
+  overflow-y:auto;
+}
+
+#leaderboard-list .me{
+  color:#44cc22
+}
 @media(min-width:701px){#quiz{max-height:86vh}#quiz-inner{max-width:720px;padding:18px 20px 26px}#quiz-portrait{width:52px;height:52px}#quiz-zone-lbl{font-size:7px}#quiz-prog{font-size:7px}#quiz-lesson{font-size:8px;line-height:1.9;padding:12px;margin-bottom:12px}#quiz-q{font-size:9px;line-height:1.8;margin-bottom:12px}.qopt{font-size:7px;line-height:1.7;padding:13px 10px;min-height:58px}#quiz-fb-msg{font-size:8px;line-height:1.8}#btn-next{font-size:8px;padding:14px}}
 @media(max-width:700px){#topbar{gap:6px;padding:0 6px;height:36px}#player-name-label{font-size:6px;max-width:82px}#xp-track{min-width:46px;height:9px}#xp-txt{font-size:6px;font-weight:bold}#ranking-btn{font-size:5px;padding:6px 5px}#leaderboard{top:40px;right:6px;width:210px}#minimap-cv{top:44px!important}#start-card h1{font-size:10px}.start-input,.start-select{font-size:6px}}
 
