@@ -97,18 +97,10 @@ Important: `question_history` must not be deleted during the season, otherwise r
 - Wallet button is hidden only after the game actually starts.
 
 
-## V10 Header Final
+## V12 Question History Fix
 
-- Holder status is merged into the left header text.
-- Right-side holder badge removed.
-- Wallet connect buttons are visible only on login.
-- Game-start detection is now checked directly through the same-origin iframe.
-- Season Ranking area is no longer covered by the React wallet/holder UI.
-
-
-## V11 Randomized Questions
-
-- Questions are now randomized per player.
-- Different players receive different daily question sets.
-- Questions still never repeat for the same player.
-- Daily UTC lock system remains unchanged.
+- Fixes repeated questions across daily resets.
+- Daily randomized questions now carry the real pool index as `__questionIndex`.
+- `question_history.question_idx` stores the real question index from the full dojo pool, not the daily slot 0/1/2.
+- `seenQuestions` updates immediately with the real pool index.
+- Wallet, ranking, multipliers, Koins and daily locks are unchanged.

@@ -153,35 +153,6 @@ export default function App() {
     return () => window.removeEventListener('message', handleCampusMessage);
   }, []);
 
-
-  useEffect(() => {
-    function checkIframeLoginState() {
-      try {
-        const doc = iframeRef.current?.contentWindow?.document;
-        if (!doc) return;
-
-        const startScreen = doc.getElementById('start-screen');
-        if (!startScreen) return;
-
-        const style = iframeRef.current.contentWindow.getComputedStyle(startScreen);
-        const visible =
-          style.display !== 'none' &&
-          style.visibility !== 'hidden' &&
-          style.opacity !== '0';
-
-        setGameStarted(!visible);
-      } catch (e) {
-        // iframe is same-origin in Vercel/Vite, but ignore if browser blocks temporarily
-      }
-    }
-
-    const timer = setInterval(checkIframeLoginState, 700);
-    setTimeout(checkIframeLoginState, 300);
-    setTimeout(checkIframeLoginState, 1200);
-
-    return () => clearInterval(timer);
-  }, [frameReady]);
-
   return (
     <div className={`app-shell ${gameStarted ? "game-started" : "login-active"}`}>
       <div className="wallet-bar">
@@ -190,7 +161,7 @@ export default function App() {
             <div className="brand-title">KOALIFIED CAMPUS</div>
             <div className="brand-sub">
               {isConnected
-                ? `Wallet connected! ${shortAddress(address)} · x${multiplier} · ${holderLabel}`
+                ? `Wallet connected! ${shortAddress(address)}`
                 : 'Warm-Up Season'}
             </div>
           </div>
@@ -216,6 +187,14 @@ export default function App() {
           )}
         </div>
       </div>
+
+      {isConnected && (
+        <div className="holder-status">
+          <span>{shortAddress(address)}</span>
+          <strong>x{multiplier}</strong>
+          <span>{holderLabel}</span>
+        </div>
+      )}
 
       <iframe
         ref={iframeRef}

@@ -580,14 +580,6 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0a0800;font-family:
   }
 }
 
-
-/* KOALIFIED V10 NO DUPLICATE HOLDER BADGE */
-#holder-status,
-.holder-status,
-#react-holder-status{
-  display:none!important;
-}
-
 </style>
 <script>
 // Save native fetch before MetaMask SES lockdown
@@ -1067,7 +1059,7 @@ async function sbLoadSeenQuestions(playerId) {
 async function sbSaveAnswer(playerId, dojoId, qIdx, correct, koinsEarned) {
   if (!playerId || qIdx < 0) return;
 
-  console.log('SUPABASE save answer:', { playerId, dojoId, qIdx, correct, koinsEarned });
+  console.log('SUPABASE save answer REAL QUESTION IDX:', { playerId, dojoId, qIdx, correct, koinsEarned });
 
   await sbFetch(
     'question_history?on_conflict=player_id,dojo_id,question_idx,season',
@@ -1545,8 +1537,13 @@ function getSeenQuestions(zi) {
 }
 
 function markQuestionSeen(zi, qIdx) {
+  if (typeof qIdx !== 'number' || qIdx < 0) return;
+
   if (!seenQuestions[zi]) seenQuestions[zi] = [];
-  if (seenQuestions[zi].indexOf(qIdx) < 0) seenQuestions[zi].push(qIdx);
+
+  if (seenQuestions[zi].indexOf(qIdx) < 0) {
+    seenQuestions[zi].push(qIdx);
+  }
 }
 
 var answeredCorrect = false;
@@ -1785,57 +1782,30 @@ function chooseDailyQuestionsNoRepeat(zi) {
   var seen = seenQuestions[zi] || [];
 
   var available = pool
-    .map(function(q, idx){
-      return {
-        q:q,
-        idx:idx
-      };
-    })
-    .filter(function(item){
-      return seen.indexOf(item.idx) < 0;
-    });
+    .map(function(q, idx){ return { q:q, idx:idx }; })
+    .filter(function(item){ return seen.indexOf(item.idx) < 0; });
 
-  if (available.length === 0) {
-    return [];
-  }
+  if (available.length === 0) return [];
 
-  // TRUE PLAYER-SPECIFIC RANDOMIZATION
-  // Every player gets a different question order
-  // but questions never repeat for that player.
-
-  var seedBase =
-    (playerDbId || playerName || 'guest') +
-    '-' +
-    getUtcDateKey() +
-    '-' +
-    zi +
-    '-' +
-    available.length;
-
+  // deterministic daily rotation per player/date/dojo, but still only from unseen questions
+  var seedStr = (playerDbId || playerName || 'guest') + '-' + getUtcDateKey() + '-' + zi;
   var seed = 0;
-
-  for (var i = 0; i < seedBase.length; i++) {
-    seed = ((seed << 5) - seed + seedBase.charCodeAt(i)) >>> 0;
+  for (var i = 0; i < seedStr.length; i++) {
+    seed = (seed * 31 + seedStr.charCodeAt(i)) >>> 0;
   }
 
-  function seededRandom() {
-    seed = (seed * 1664525 + 1013904223) >>> 0;
-    return seed / 4294967296;
-  }
-
-  // Fisher-Yates Shuffle
-  for (var j = available.length - 1; j > 0; j--) {
-    var randIndex = Math.floor(seededRandom() * (j + 1));
-
-    var temp = available[j];
-    available[j] = available[randIndex];
-    available[randIndex] = temp;
-  }
+  available.sort(function(a,b){
+    var av = ((a.idx + 1) * 1103515245 + seed) >>> 0;
+    var bv = ((b.idx + 1) * 1103515245 + seed) >>> 0;
+    return av - bv;
+  });
 
   return available
     .slice(0, QUESTIONS_PER_DOJO)
     .map(function(item){
-      return item.q;
+      var q = Object.assign({}, item.q);
+      q.__questionIndex = item.idx;
+      return q;
     });
 }
 
@@ -2333,13 +2303,20 @@ function answer(btn,correct,xpAmt,explanation){
   btn.classList.add(correct?"ok":"no");
 
   var savedQuestionIdx = -1;
-  var dailyQs=getDailyQuestions(activeZ);
+  var dailyQs = getDailyQuestions(activeZ);
+  var currentQuestion = dailyQs[currentQ];
 
-  if(dailyQs[currentQ]){
-    var qi=ZONE_QUESTIONS[activeZ].indexOf(dailyQs[currentQ]);
-    if(qi>=0){
+  if (currentQuestion && typeof currentQuestion.__questionIndex === 'number') {
+    savedQuestionIdx = currentQuestion.__questionIndex;
+    markQuestionSeen(activeZ, savedQuestionIdx);
+  } else if (currentQuestion) {
+    var qi = ZONE_QUESTIONS[activeZ].findIndex(function(q){
+      return q.q === currentQuestion.q;
+    });
+
+    if (qi >= 0) {
       savedQuestionIdx = qi;
-      markQuestionSeen(activeZ,qi);
+      markQuestionSeen(activeZ, savedQuestionIdx);
     }
   }
 
