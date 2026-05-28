@@ -104,3 +104,16 @@ Important: `question_history` must not be deleted during the season, otherwise r
 - `question_history.question_idx` stores the real question index from the full dojo pool, not the daily slot 0/1/2.
 - `seenQuestions` updates immediately with the real pool index.
 - Wallet, ranking, multipliers, Koins and daily locks are unchanged.
+
+
+## V13 Hotfix
+
+Fixes:
+- Anti-reload farming exploit: Dojo is locked for the UTC day as soon as the quiz starts.
+- Mobile quiz scroll issue: long explanations no longer block the Next button.
+- Question history continues to store real randomized question indexes.
+- Total Koins text corrected.
+- Leaderboard list can scroll.
+
+Tradeoff:
+If a player starts a Dojo and reloads before finishing 3/3, that Dojo is consumed for the current UTC day. This is intentional for Warm-Up to prevent infinite Koins farming.

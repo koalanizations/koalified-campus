@@ -200,7 +200,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0a0800;font-family:
 #leaderboard-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
 #leaderboard-title{font-size:6px}
 #leaderboard-close{background:#120000;color:#e8c96a;border:1px solid #4a3200;font-family:"Press Start 2P",monospace;font-size:7px;width:22px;height:20px;cursor:pointer}
-#leaderboard-list{font-size:5px;color:#bbb;line-height:1.9;max-height:120px;overflow:hidden}
+#leaderboard-list{font-size:5px;color:#bbb;line-height:1.9;max-height:220px;overflow-y:auto}
 #leaderboard-list .me{color:#44cc22}
 @media(min-width:701px){#quiz{max-height:86vh}#quiz-inner{max-width:720px;padding:18px 20px 26px}#quiz-portrait{width:52px;height:52px}#quiz-zone-lbl{font-size:7px}#quiz-prog{font-size:7px}#quiz-lesson{font-size:8px;line-height:1.9;padding:12px;margin-bottom:12px}#quiz-q{font-size:9px;line-height:1.8;margin-bottom:12px}.qopt{font-size:7px;line-height:1.7;padding:13px 10px;min-height:58px}#quiz-fb-msg{font-size:8px;line-height:1.8}#btn-next{font-size:8px;padding:14px}}
 @media(max-width:700px){#topbar{gap:6px;padding:0 6px;height:36px}#player-name-label{font-size:6px;max-width:82px}#xp-track{min-width:46px;height:9px}#xp-txt{font-size:6px;font-weight:bold}#ranking-btn{font-size:5px;padding:6px 5px}#leaderboard{top:40px;right:6px;width:210px}#minimap-cv{top:44px!important}#start-card h1{font-size:10px}.start-input,.start-select{font-size:6px}}
@@ -580,6 +580,52 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0a0800;font-family:
   }
 }
 
+
+/* KOALIFIED V13 MOBILE QUIZ SCROLL HOTFIX */
+#quiz{
+  max-height:calc(100vh - 42px)!important;
+  overflow-y:auto!important;
+  -webkit-overflow-scrolling:touch!important;
+  overscroll-behavior:contain!important;
+}
+
+#quiz-inner{
+  max-height:none!important;
+  padding-bottom:120px!important;
+}
+
+#quiz-fb,
+#quiz-fb-msg{
+  overflow-wrap:break-word!important;
+  word-break:normal!important;
+  white-space:normal!important;
+}
+
+@media(max-width:700px){
+  #quiz{
+    top:auto!important;
+    bottom:0!important;
+    max-height:82vh!important;
+    overflow-y:auto!important;
+  }
+
+  #quiz-inner{
+    padding-bottom:130px!important;
+  }
+
+  #quiz-fb-msg{
+    font-size:6px!important;
+    line-height:1.9!important;
+  }
+
+  #btn-next{
+    position:sticky!important;
+    bottom:8px!important;
+    z-index:5!important;
+    box-shadow:0 0 18px rgba(0,0,0,.7)!important;
+  }
+}
+
 </style>
 <script>
 // Save native fetch before MetaMask SES lockdown
@@ -731,16 +777,10 @@ document.addEventListener('DOMContentLoaded', function(){
     <h2>✦ Koalified ✦</h2>
     <p>You have mastered all of today's lessons.</p>
     <p>Come back tomorrow for new challenges.</p>
-
+    <p id="daily-complete-sub">Return tomorrow for new challenges.</p>
     <div id="daily-complete-koins"></div>
-
-    <button id="daily-lb-btn" onclick="document.getElementById('daily-complete').style.display='none';toggleLeaderboard()">
-      🏆 View Leaderboard
-    </button>
-
-    <button id="daily-close-btn" onclick="document.getElementById('daily-complete').style.display='none'">
-      Continue Exploring
-    </button>
+    <button id="daily-lb-btn" onclick="document.getElementById('daily-complete').style.display='none';toggleLeaderboard()">🏆 View Leaderboard</button>
+    <button id="daily-close-btn" onclick="document.getElementById('daily-complete').style.display='none'">Continue Exploring</button>
   </div>
 </div>
 
@@ -1751,6 +1791,7 @@ function applyDailyLocks(rows) {
   (rows || []).forEach(function(row){
     if (typeof row.dojo_id === 'number' && zoneDone[row.dojo_id] !== undefined) {
       dailyCompletedDojos[row.dojo_id] = true;
+      dailyStartedDojos[row.dojo_id] = true;
       zoneDone[row.dojo_id] = true;
       if (ZONES[row.dojo_id]) ZONES[row.dojo_id].done = true;
     }
@@ -1838,6 +1879,58 @@ var _dailyCompleteShown = false;
 
 function tryEnterZone() {
   if (nearZoneIdx >= 0 && zoneCooldown <= 0) openQuiz(nearZoneIdx);
+}
+
+
+/* KOALIFIED V13 ANTI-RELOAD FARM HOTFIX */
+var dailyStartedDojos = window.dailyStartedDojos || [];
+window.dailyStartedDojos = dailyStartedDojos;
+
+async function sbSaveDailyDojoStarted(playerId, dojoId) {
+  if (!playerId && !playerDbId) return null;
+  playerId = playerId || playerDbId;
+
+  var today = getUtcDateKey();
+
+  console.log('SUPABASE lock dojo on start:', {
+    playerId: playerId,
+    dojoId: dojoId,
+    completed_date: today
+  });
+
+  return await sbFetch(
+    'daily_dojo_completions?on_conflict=player_id,dojo_id,completed_date',
+    'POST',
+    {
+      player_id: playerId,
+      dojo_id: dojoId,
+      completed_date: today,
+      questions_answered: 0,
+      created_at: new Date().toISOString()
+    }
+  );
+}
+
+function lockDojoForTodayOnStart(zi) {
+  if (typeof zi !== 'number') return;
+
+  dailyStartedDojos[zi] = true;
+  dailyCompletedDojos[zi] = true;
+  window.dailyStartedDojos = dailyStartedDojos;
+  window.dailyCompletedDojos = dailyCompletedDojos;
+
+  zoneDone[zi] = true;
+  if (ZONES[zi]) ZONES[zi].done = true;
+
+  if (playerDbId) {
+    sbSaveDailyDojoStarted(playerDbId, zi).catch(function(e){
+      console.warn('Daily dojo start lock failed:', e);
+    });
+  }
+}
+
+function isDojoLockedForToday(zi) {
+  return !!dailyCompletedDojos[zi] || !!dailyStartedDojos[zi] || !!zoneDone[zi];
 }
 
 function openQuiz(zi) {
@@ -2000,7 +2093,7 @@ function showDailyComplete() {
   }
 
   var koinsEl = document.getElementById('daily-complete-koins');
-  if (koinsEl) koinsEl.textContent = '🌿 ' + bamboo + ' Koins earned today!';
+  if (koinsEl) koinsEl.textContent = '🌿 ' + bamboo + ' Total Koins collected!';
 
   el.style.display = 'flex';
   el.style.visibility = 'visible';
